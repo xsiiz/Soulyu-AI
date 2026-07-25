@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "tunnel": "npx -y cloudflared tunnel --url http://127.0.0.1:3000",
+    "dev:tunnel": "node server.js & npx -y cloudflared tunnel --url http://127.0.0.1:3000"
   },
   "keywords": [],
   "author": "",

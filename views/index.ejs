@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full bg-slate-950 text-slate-100 dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Soulyu AI v1.0.0 - ระบบผู้ช่วย AI อัจฉริยะส่วนตัว รองรับโมเดลภาษาไทย สรุปเอกสาร PDF และวิเคราะห์รูปภาพ">
+  <meta name="author" content="Soulyu AI">
+  <meta property="og:title" content="Soulyu AI v1.0.0 - Intelligence Workspace">
+  <meta property="og:description" content="ระบบผู้ช่วย AI อัจฉริยะส่วนตัว รองรับโมเดลภาษาไทย สรุปเอกสาร PDF และวิเคราะห์รูปภาพ">
+  <meta property="og:type" content="website">
+  
+  <title>Soulyu AI v1.0.0 - Intelligence Workspace</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Markdown & Syntax Highlighter -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-autoloader.min.js"></script>
+
+  <!-- PDF.js for PDF text extraction -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="h-screen flex flex-col antialiased selection:bg-violet-500 selection:text-white overflow-hidden bg-slate-950">
+
+  <!-- Top Navbar -->
+  <header class="h-14 border-b border-slate-800/80 glass-panel fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-3 md:px-5">
+    <div class="flex items-center gap-3">
+      <!-- Toggle Sidebar Mobile/Desktop -->
+      <button id="toggleSidebarBtn" class="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition">
+        <i data-lucide="panel-left" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-tr from-violet-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+          <i data-lucide="sparkles" class="w-4 h-4 text-white"></i>
+        </div>
+        <span class="font-bold text-base tracking-tight bg-gradient-to-r from-white via-slate-200 to-violet-300 bg-clip-text text-transparent">
+          SOULYU <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20">AI</span>
+        </span>
+      </div>
+    </div>
+
+    <!-- Model Selection Header Dropdown -->
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200">
+        <i data-lucide="cpu" class="w-3.5 h-3.5 text-violet-400"></i>
+        <select id="modelSelect" class="bg-transparent focus:outline-none cursor-pointer text-xs text-slate-200 pr-1">
+          <option value="qwen2.5:3b">⚡ ตอบด่วน (Qwen 3B)</option>
+          <option value="qwen2.5:7b">🧠 คิดหน่อย (Qwen 7B)</option>
+          <option value="qwen2.5-coder:7b">💻 โค้ดจ้า (Qwen Coder)</option>
+        </select>
+      </div>
+
+      <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Ollama Core</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Body Container -->
+  <div class="flex-1 pt-14 flex overflow-hidden h-full relative">
+    
+    <!-- Sidebar Overlay (Mobile) -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-30 hidden md:hidden"></div>
+
+    <!-- Sidebar Container -->
+    <aside id="sidebar" class="w-72 bg-slate-900/80 border-r border-slate-800/80 flex flex-col justify-between shrink-0 fixed md:relative inset-y-0 left-0 z-40 transition-transform duration-300 transform -translate-x-full md:translate-x-0 pt-14 md:pt-0">
+      
+      <div class="p-3 space-y-3 flex-1 flex flex-col min-h-0">
+        <!-- New Chat Button -->
+        <button id="newChatBtn" class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-violet-600/20 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i> แชทใหม่ (New Chat)
+        </button>
+
+        <!-- Sessions List Header -->
+        <div class="flex items-center justify-between px-2 pt-2">
+          <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1">
+            <i data-lucide="history" class="w-3 h-3"></i> ประวัติการสนทนา
+          </span>
+          <span id="sessionCount" class="text-[10px] text-slate-500">0 รายการ</span>
+        </div>
+
+        <!-- Chat Sessions Scrollable List -->
+        <div id="sessionsList" class="flex-1 overflow-y-auto custom-scrollbar space-y-1 pr-1">
+          <!-- Session items inserted dynamically -->
+        </div>
+      </div>
+
+      <!-- Sidebar Footer -->
+      <div class="p-3 border-t border-slate-800/80 space-y-2">
+        <button id="systemPromptToggleBtn" class="w-full bg-slate-800/50 hover:bg-slate-800 text-slate-300 text-xs py-2 px-2.5 rounded-lg flex items-center justify-between transition">
+          <span class="flex items-center gap-2">
+            <i data-lucide="sliders" class="w-3.5 h-3.5 text-violet-400"></i> ตั้งค่า System Prompt
+          </span>
+          <i data-lucide="chevron-down" id="promptChevron" class="w-3.5 h-3.5 transition-transform"></i>
+        </button>
+
+        <!-- System Prompt Area (Collapsible) -->
+        <div id="systemPromptContainer" class="hidden space-y-2 pt-1">
+          <textarea id="systemPrompt" rows="3" class="w-full bg-slate-950 border border-slate-700/80 rounded-lg p-2.5 text-xs text-slate-300 focus:outline-none focus:border-violet-500 leading-relaxed custom-scrollbar" placeholder="กำหนดบุคลิก AI...">คุณคือ Soulyu AI ผู้ช่วยอัจฉริยะส่วนตัว ตอบคำถามและอธิบายด้วยภาษาไทยอย่างสุภาพ แม่นยำ และเป็นกันเอง ห้ามตอบหรือใช้ภาษาจีนโดยเด็ดขาด (เว้นแต่ผู้ใช้จะสั่งให้แปลเป็นภาษาจีน)</textarea>
+          <div class="flex items-center justify-between pt-1">
+            <button type="button" id="saveSystemPromptBtn" class="bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-medium py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition shadow">
+              <i data-lucide="save" class="w-3.5 h-3.5"></i> บันทึก System Prompt
+            </button>
+            <span id="savePromptToast" class="text-[10px] text-emerald-400 font-medium hidden flex items-center gap-1">
+              <i data-lucide="check" class="w-3 h-3"></i> บันทึกแล้ว!
+            </span>
+          </div>
+        </div>
+
+        <button id="clearAllSessionsBtn" class="w-full text-slate-400 hover:text-rose-400 text-xs py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> ล้างประวัติทั้งหมด
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Chat Workspace -->
+    <main class="flex-1 flex flex-col relative bg-slate-950 overflow-hidden h-full">
+      
+      <!-- Messages Scroll Area -->
+      <div id="scrollContainer" class="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 pb-64 md:pb-72">
+        <div id="chatBox" class="max-w-3xl mx-auto space-y-6">
+          
+          <!-- Welcome Screen -->
+          <div id="welcomeCard" class="py-10 text-center space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-gradient-to-tr from-violet-600/20 to-indigo-600/20 border border-violet-500/30 text-violet-300 flex items-center justify-center mx-auto shadow-inner">
+              <i data-lucide="sparkles" class="w-7 h-7"></i>
+            </div>
+            <div class="space-y-1">
+              <h2 class="text-xl font-bold text-slate-100">Soulyu AI Intelligence</h2>
+              <p class="text-xs text-slate-400 max-w-sm mx-auto">พิมพ์คำถาม หรือแนบไฟล์รูปภาพ/เอกสาร (PDF, TXT, Code) เพื่อเริ่มวิเคราะห์ได้ทันที</p>
+            </div>
+
+            <!-- Suggestion Chips -->
+            <div class="pt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5 max-w-xl mx-auto text-left">
+              <button class="suggestion-chip p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 text-xs text-slate-300 transition group flex flex-col justify-between h-20">
+                <span class="font-medium text-slate-200">ช่วยสรุปไฟล์เอกสาร</span>
+                <span class="text-[10px] text-slate-500 group-hover:text-violet-400 transition">แนบไฟล์ PDF หรือ TXT เพื่อสรุป</span>
+              </button>
+
+              <button class="suggestion-chip p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 text-xs text-slate-300 transition group flex flex-col justify-between h-20">
+                <span class="font-medium text-slate-200">เขียนและตรวจโค้ด</span>
+                <span class="text-[10px] text-slate-500 group-hover:text-violet-400 transition">ช่วยสร้างโค้ด JavaScript หรือ Python</span>
+              </button>
+
+              <button class="suggestion-chip p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-800 text-xs text-slate-300 transition group flex flex-col justify-between h-20">
+                <span class="font-medium text-slate-200">วิเคราะห์รูปภาพ</span>
+                <span class="text-[10px] text-slate-500 group-hover:text-violet-400 transition">แนบไฟล์รูปภาพเพื่ออธิบายรายละเอียด</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Gemini Floating Input Bar -->
+      <div class="absolute bottom-0 left-0 right-0 p-3 md:p-4 bg-gradient-to-t from-slate-950 via-slate-950/95 to-transparent pointer-events-none z-10">
+        <div class="max-w-3xl mx-auto pointer-events-auto space-y-2">
+          
+          <!-- Attached Files Preview Container -->
+          <div id="attachedFilesContainer" class="flex flex-wrap gap-2 empty:hidden px-1"></div>
+
+          <form id="chatForm" onsubmit="event.preventDefault(); return false;" class="relative glass-panel rounded-2xl border border-slate-700/60 shadow-2xl p-2 flex flex-col transition-all focus-within:border-violet-500/80">
+            
+            <!-- Hidden File Input -->
+            <input type="file" id="fileInput" multiple accept="image/*,.pdf,.txt,.md,.json,.csv,.js,.py,.html,.css,.doc,.docx" class="hidden">
+
+            <!-- Auto-expanding Textarea -->
+            <textarea id="userInput" rows="1" placeholder="พิมพ์ข้อความคำถาม หรือแนบไฟล์เอกสาร/รูปภาพ..." class="w-full bg-transparent px-3 py-2 text-sm text-slate-100 focus:outline-none placeholder-slate-500 resize-none max-h-44 custom-scrollbar"></textarea>
+
+            <!-- Bottom Bar Controls inside Form -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/40 px-2 mt-1">
+              <div class="flex items-center gap-2">
+                <!-- Attach File Button -->
+                <button type="button" id="attachBtn" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition flex items-center gap-1.5 text-xs" title="แนบไฟล์รูปภาพ/เอกสาร/PDF">
+                  <i data-lucide="paperclip" class="w-4 h-4 text-violet-400"></i>
+                  <span class="hidden sm:inline text-[11px]">แนบไฟล์</span>
+                </button>
+
+                <span id="charCounter" class="text-[10px] text-slate-500">0 ตัวอักษร</span>
+              </div>
+
+              <div class="flex items-center gap-2">
+                <button type="submit" id="submitBtn" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-xl px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition shadow-lg shadow-violet-600/25 shrink-0">
+                  <span>ส่งข้อความ</span>
+                  <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <div class="text-center mt-1 flex items-center justify-center gap-2">
+            <span class="text-[10px] text-slate-500">Soulyu AI Core • รองรับไฟล์เอกสาร PDF/Text และรูปภาพ</span>
+          </div>
+
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Client Master Application Script -->
+  <script src="/js/app.js"></script>
+</body>
+</html>

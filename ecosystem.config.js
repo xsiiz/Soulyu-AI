@@ -14,7 +14,7 @@ module.exports = {
     {
       name: 'soulyu-tunnel',
       script: 'npx',
-      args: '-y cloudflared tunnel --url http://127.0.0.1:3000',
+      args: '-y ngrok http 3000 --url=soulyuintelligent.xsiiz.space',
       autorestart: true,
       watch: false
     }

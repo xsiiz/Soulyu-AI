@@ -1,9 +1,13 @@
-// Soulyu AI - Single Consolidated Client Application Script
-
 // ==========================================
 // 1. STATE & GLOBAL VARIABLES
 // ==========================================
-const STORAGE_KEY = 'soulyu_ai_sessions';
+let currentUser = null;
+let isRegisterMode = false;
+let firebaseAuth = null;
+
+function getStorageKey() {
+  return currentUser ? `soulyu_ai_sessions_${currentUser.uid}` : 'soulyu_ai_sessions_guest';
+}
 
 let sessions = [];
 let activeSessionId = null;
@@ -17,7 +21,7 @@ let attachedFiles = [];
 // ==========================================
 if (window.marked) {
   marked.setOptions({
-    highlight: function(code, lang) {
+    highlight: function (code, lang) {
       if (window.Prism && Prism.languages[lang]) {
         return Prism.highlight(code, Prism.languages[lang], lang);
       }
@@ -27,10 +31,10 @@ if (window.marked) {
   });
 
   const originalRenderer = new marked.Renderer();
-  originalRenderer.code = function(code, language) {
+  originalRenderer.code = function (code, language) {
     let rawCode = '';
     let lang = '';
-    
+
     if (typeof code === 'object' && code !== null) {
       rawCode = code.text || '';
       lang = code.lang || language || '';
@@ -40,12 +44,12 @@ if (window.marked) {
     }
 
     const validLang = lang && window.Prism && Prism.languages[lang] ? lang : 'text';
-    const highlighted = window.Prism && Prism.languages[validLang] 
-      ? Prism.highlight(rawCode, Prism.languages[validLang], validLang) 
+    const highlighted = window.Prism && Prism.languages[validLang]
+      ? Prism.highlight(rawCode, Prism.languages[validLang], validLang)
       : escapeHtml(rawCode);
 
     const codeId = 'code-' + Math.random().toString(36).substr(2, 9);
-    
+
     return `
       <div class="relative group my-3 rounded-xl overflow-hidden border border-slate-800 bg-slate-900/90 shadow-md">
         <div class="flex items-center justify-between px-3 py-1.5 bg-slate-800/80 border-b border-slate-700/50 text-[11px] text-slate-400">
@@ -74,7 +78,7 @@ function safeMarkedParse(text) {
 }
 
 function escapeHtml(text) {
-  return String(text || '').replace(/[&<>"']/g, function(m) {
+  return String(text || '').replace(/[&<>"']/g, function (m) {
     return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
   });
 }
@@ -84,9 +88,9 @@ function escapeHtml(text) {
 // ==========================================
 function loadSessionsFromStorage() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(getStorageKey());
     sessions = raw ? JSON.parse(raw) : [];
-    
+
     // Clean empty assistant messages
     sessions.forEach(sess => {
       if (sess.messages) {
@@ -111,7 +115,7 @@ function loadSessionsFromStorage() {
 }
 
 function saveSessionsToStorage() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  localStorage.setItem(getStorageKey(), JSON.stringify(sessions));
   renderSessionsList();
 }
 
@@ -179,11 +183,10 @@ function renderSessionsList() {
   sessions.forEach(sess => {
     const isActive = sess.id === activeSessionId;
     const item = document.createElement('div');
-    item.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-xs transition ${
-      isActive 
-        ? 'bg-violet-600/15 text-violet-300 font-medium border border-violet-500/30' 
+    item.className = `group flex items-center justify-between p-2.5 rounded-xl cursor-pointer text-xs transition ${isActive
+        ? 'bg-violet-600/15 text-violet-300 font-medium border border-violet-500/30'
         : 'text-slate-300 hover:bg-slate-800/60 hover:text-white border border-transparent'
-    }`;
+      }`;
 
     item.innerHTML = `
       <div class="flex items-center gap-2 min-w-0 flex-1">
@@ -252,15 +255,25 @@ function appendMessageUI(role, content, images = []) {
 
   let imagesHtml = '';
   if (images && images.length > 0) {
-    imagesHtml = `<div class="flex flex-wrap gap-2 mb-2">` + 
+    imagesHtml = `<div class="flex flex-wrap gap-2 mb-2">` +
       images.map(img => `<img src="${img.startsWith('data:') ? img : 'data:image/png;base64,' + img}" class="max-w-[200px] max-h-[200px] object-cover rounded-xl border border-slate-700 shadow">`).join('') +
       `</div>`;
   }
 
+  let userAvatarContent = 'YOU';
+  if (isUser && currentUser) {
+    if (currentUser.photoURL) {
+      userAvatarContent = `<img src="${currentUser.photoURL}" class="w-full h-full rounded-xl object-cover">`;
+    } else if (currentUser.displayName || currentUser.email) {
+      const str = currentUser.displayName || currentUser.email;
+      userAvatarContent = escapeHtml(str.charAt(0).toUpperCase());
+    }
+  }
+
   wrapper.innerHTML = `
     <div class="flex gap-3 max-w-2xl ${isUser ? 'flex-row-reverse' : 'flex-row'} items-start w-full">
-      <div class="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center text-xs font-bold ${isUser ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white shadow-md' : 'bg-slate-900 text-violet-300 border border-slate-800 shadow-md'}">
-        ${isUser ? 'YOU' : '<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i>'}
+      <div class="w-8 h-8 rounded-xl shrink-0 flex items-center justify-center text-xs font-bold overflow-hidden ${isUser ? 'bg-gradient-to-tr from-violet-600 to-indigo-600 text-white shadow-md' : 'bg-slate-900 text-violet-300 border border-slate-800 shadow-md'}">
+        ${isUser ? userAvatarContent : '<i data-lucide="sparkles" class="w-4 h-4 text-violet-400"></i>'}
       </div>
       
       <div class="space-y-1 max-w-[85%]">
@@ -364,6 +377,24 @@ function copyMessageText(btn) {
   });
 }
 
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  if (!sidebar) return;
+
+  const isMobile = window.innerWidth < 768;
+
+  if (isMobile) {
+    const isHidden = sidebar.classList.contains('-translate-x-full');
+    if (isHidden) {
+      openMobileSidebar();
+    } else {
+      closeMobileSidebar();
+    }
+  } else {
+    sidebar.classList.toggle('collapsed-sidebar');
+  }
+}
+
 function closeMobileSidebar() {
   const sidebar = document.getElementById('sidebar');
   const sidebarOverlay = document.getElementById('sidebarOverlay');
@@ -404,7 +435,7 @@ async function loadAvailableModels() {
     const models = await res.json();
     if (models && models.length > 0) {
       modelSelect.innerHTML = '';
-      
+
       const textModels = models.filter(m => {
         const name = m.name.toLowerCase();
         return !name.includes('moondream') && !name.includes('vision') && !name.includes('llava');
@@ -451,16 +482,16 @@ function regenerateLastResponse() {
   if (isGenerating || !modelSelect) return;
   const sess = getActiveSession();
   if (!sess || sess.messages.length < 2) return;
-  
+
   if (sess.messages[sess.messages.length - 1].role === 'assistant') {
     sess.messages.pop();
   }
-  
+
   const lastUserMsg = sess.messages.filter(m => m.role === 'user').pop();
   if (!lastUserMsg) return;
 
   renderActiveSessionMessages();
-  
+
   const aiMsgElement = appendMessageUI('assistant', '');
   currentAbortController = new AbortController();
   setGeneratingState(true);
@@ -560,7 +591,7 @@ function renderAttachedFilesPreview() {
   attachedFiles.forEach((file, index) => {
     const chip = document.createElement('div');
     chip.className = 'flex items-center gap-2 bg-slate-900 border border-slate-700/80 text-slate-200 px-2.5 py-1.5 rounded-xl text-xs shadow-md';
-    
+
     if (file.isImage) {
       chip.innerHTML = `
         <img src="${file.dataUrl}" class="w-6 h-6 object-cover rounded-lg border border-slate-700 shrink-0">
@@ -685,7 +716,7 @@ async function handleChatSubmit(e) {
       if (done) break;
       const chunk = decoder.decode(value, { stream: true });
       fullAiText += chunk;
-      
+
       aiMsgElement.innerHTML = safeMarkedParse(fullAiText);
       if (window.lucide) lucide.createIcons();
       const scrollContainer = document.getElementById('scrollContainer');
@@ -736,7 +767,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const userInput = document.getElementById('userInput');
   const modelSelect = document.getElementById('modelSelect');
   const charCounter = document.getElementById('charCounter');
-  
+
   const attachBtn = document.getElementById('attachBtn');
   const fileInput = document.getElementById('fileInput');
 
@@ -751,7 +782,7 @@ document.addEventListener('DOMContentLoaded', () => {
     saveSystemPromptBtn.addEventListener('click', () => {
       const val = systemPrompt ? systemPrompt.value.trim() : '';
       localStorage.setItem('soulyu_system_prompt', val);
-      
+
       const sess = getActiveSession();
       if (sess && sess.messages) {
         if (sess.messages.length > 0 && sess.messages[0].role === 'system') {
@@ -784,7 +815,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modelSelect.addEventListener('change', async () => {
       const newModel = modelSelect.value;
       localStorage.setItem('soulyu_selected_model', newModel);
-      
+
       setModelSwitchingState(true);
       await new Promise(r => setTimeout(r, 1000));
       setModelSwitchingState(false);
@@ -879,7 +910,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearAllSessionsBtn.addEventListener('click', () => {
       if (confirm('คุณต้องการล้างประวัติการสนทนาทั้งหมดหรือไม่?')) {
         sessions = [];
-        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(getStorageKey());
         createNewSession();
       }
     });
@@ -893,21 +924,195 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (toggleSidebarBtn) {
-    toggleSidebarBtn.addEventListener('click', () => {
-      const sidebar = document.getElementById('sidebar');
-      if (sidebar && sidebar.classList.contains('-translate-x-full')) {
-        openMobileSidebar();
-      } else {
-        closeMobileSidebar();
-      }
-    });
+    toggleSidebarBtn.addEventListener('click', toggleSidebar);
   }
 
   if (sidebarOverlay) {
     sidebarOverlay.addEventListener('click', closeMobileSidebar);
   }
 
+  // Auth Modal & Buttons Binding
+  const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+  const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+  const googleSignInBtn = document.getElementById('googleSignInBtn');
+  const toggleAuthModeBtn = document.getElementById('toggleAuthModeBtn');
+  const authForm = document.getElementById('authForm');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  if (openAuthModalBtn) openAuthModalBtn.addEventListener('click', openAuthModal);
+  if (closeAuthModalBtn) closeAuthModalBtn.addEventListener('click', closeAuthModal);
+  if (toggleAuthModeBtn) toggleAuthModeBtn.addEventListener('click', toggleAuthMode);
+
+  if (googleSignInBtn) {
+    googleSignInBtn.addEventListener('click', async () => {
+      if (!firebaseAuth) return;
+      try {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        await firebaseAuth.signInWithPopup(provider);
+        closeAuthModal();
+      } catch (err) {
+        console.error('Google Sign-In Error:', err);
+        const authErrorMsg = document.getElementById('authErrorMsg');
+        if (authErrorMsg) {
+          authErrorMsg.textContent = 'ไม่สามารถเข้าสู่ระบบด้วย Google ได้: ' + (err.message || 'เกิดข้อผิดพลาด');
+          authErrorMsg.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  if (authForm) {
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!firebaseAuth) return;
+
+      const email = document.getElementById('authEmail').value;
+      const password = document.getElementById('authPassword').value;
+      const authErrorMsg = document.getElementById('authErrorMsg');
+
+      if (authErrorMsg) authErrorMsg.classList.add('hidden');
+
+      try {
+        if (isRegisterMode) {
+          await firebaseAuth.createUserWithEmailAndPassword(email, password);
+        } else {
+          await firebaseAuth.signInWithEmailAndPassword(email, password);
+        }
+        closeAuthModal();
+      } catch (err) {
+        console.error('Auth Form Error:', err);
+        if (authErrorMsg) {
+          let msg = err.message || 'เกิดข้อผิดพลาดในการเข้าสู่ระบบ';
+          if (err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+            msg = 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+          } else if (err.code === 'auth/email-already-in-use') {
+            msg = 'อีเมลนี้ถูกใช้งานแล้ว กรุณาเข้าสู่ระบบ';
+          } else if (err.code === 'auth/weak-password') {
+            msg = 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+          }
+          authErrorMsg.textContent = msg;
+          authErrorMsg.classList.remove('hidden');
+        }
+      }
+    });
+  }
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      if (confirm('คุณต้องการออกจากระบบหรือไม่?')) {
+        if (firebaseAuth) await firebaseAuth.signOut();
+      }
+    });
+  }
+
   // Initial App Startup
+  initFirebaseAuth();
   loadAvailableModels();
   loadSessionsFromStorage();
 });
+
+// ==========================================
+// FIREBASE AUTHENTICATION FUNCTIONS
+// ==========================================
+function initFirebaseAuth() {
+  if (typeof firebase === 'undefined') {
+    console.warn('Firebase SDK not loaded.');
+    return;
+  }
+
+  const firebaseConfig = {
+
+    apiKey: "AIzaSyCbK3g5QhBlO7nA2fEE-LdrPJ5cswsYf5o",
+
+    authDomain: "soulyu-ai.firebaseapp.com",
+
+    projectId: "soulyu-ai",
+
+    storageBucket: "soulyu-ai.firebasestorage.app",
+
+    messagingSenderId: "1016305688585",
+
+    appId: "1:1016305688585:web:cd1f899e9812a40ed698d8",
+
+    measurementId: "G-P2JF4SS1ZG"
+
+  };
+
+
+  if (!firebase.apps.length) {
+    firebase.initializeApp(firebaseConfig);
+  }
+
+  firebaseAuth = firebase.auth();
+
+  firebaseAuth.onAuthStateChanged(user => {
+    currentUser = user;
+    updateUserAuthUI();
+    loadSessionsFromStorage();
+  });
+}
+
+function updateUserAuthUI() {
+  const openAuthModalBtn = document.getElementById('openAuthModalBtn');
+  const userProfilePill = document.getElementById('userProfilePill');
+  const userAvatar = document.getElementById('userAvatar');
+  const userAvatarFallback = document.getElementById('userAvatarFallback');
+  const userName = document.getElementById('userName');
+
+  if (currentUser) {
+    if (openAuthModalBtn) openAuthModalBtn.classList.add('hidden');
+    if (userProfilePill) userProfilePill.classList.remove('hidden');
+
+    const nameStr = currentUser.displayName || currentUser.email || 'User';
+    if (userName) userName.textContent = nameStr.split('@')[0];
+
+    if (currentUser.photoURL) {
+      if (userAvatar) {
+        userAvatar.src = currentUser.photoURL;
+        userAvatar.classList.remove('hidden');
+      }
+      if (userAvatarFallback) userAvatarFallback.classList.add('hidden');
+    } else {
+      if (userAvatar) userAvatar.classList.add('hidden');
+      if (userAvatarFallback) {
+        userAvatarFallback.textContent = nameStr.charAt(0).toUpperCase();
+        userAvatarFallback.classList.remove('hidden');
+      }
+    }
+  } else {
+    if (openAuthModalBtn) openAuthModalBtn.classList.remove('hidden');
+    if (userProfilePill) userProfilePill.classList.add('hidden');
+  }
+}
+
+function openAuthModal() {
+  const authModal = document.getElementById('authModal');
+  if (authModal) authModal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+  const authModal = document.getElementById('authModal');
+  const authErrorMsg = document.getElementById('authErrorMsg');
+  if (authModal) authModal.classList.add('hidden');
+  if (authErrorMsg) authErrorMsg.classList.add('hidden');
+}
+
+function toggleAuthMode() {
+  isRegisterMode = !isRegisterMode;
+  const authModalTitle = document.getElementById('authModalTitle');
+  const authModalSubtitle = document.getElementById('authModalSubtitle');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const toggleAuthModeBtn = document.getElementById('toggleAuthModeBtn');
+
+  if (isRegisterMode) {
+    if (authModalTitle) authModalTitle.textContent = 'สมัครสมาชิกใหม่ Soulyu AI';
+    if (authModalSubtitle) authModalSubtitle.textContent = 'สร้างบัญชีเพื่อจัดเก็บประวัติการสนทนาส่วนตัว';
+    if (authSubmitBtn) authSubmitBtn.textContent = 'สมัครสมาชิกใหม่';
+    if (toggleAuthModeBtn) toggleAuthModeBtn.innerHTML = 'มีบัญชีอยู่แล้ว? <span class="text-violet-400 font-semibold underline">เข้าสู่ระบบ</span>';
+  } else {
+    if (authModalTitle) authModalTitle.textContent = 'เข้าสู่ระบบ Soulyu AI';
+    if (authModalSubtitle) authModalSubtitle.textContent = 'บันทึกและซิงค์ประวัติการสนทนาแยกตามบัญชีของคุณ';
+    if (authSubmitBtn) authSubmitBtn.textContent = 'เข้าสู่ระบบ';
+    if (toggleAuthModeBtn) toggleAuthModeBtn.innerHTML = 'ยังไม่มีบัญชี? <span class="text-violet-400 font-semibold underline">สมัครสมาชิกใหม่</span>';
+  }
+}

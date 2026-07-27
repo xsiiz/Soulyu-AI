@@ -5,9 +5,10 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js",
-    "tunnel": "npx -y cloudflared tunnel --url http://127.0.0.1:3000",
-    "dev:tunnel": "node server.js & npx -y cloudflared tunnel --url http://127.0.0.1:3000"
+    "start": "node scripts/start.js",
+    "server": "node server.js",
+    "tunnel": "npx -y ngrok http 3000 --url=soulyuintelligent.xsiiz.space",
+    "dev:tunnel": "node server.js & npx -y ngrok http 3000 --url=soulyuintelligent.xsiiz.space"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +17,9 @@
   "dependencies": {
     "ejs": "^6.0.1",
     "express": "^5.2.1",
+    "firebase": "^12.16.0",
     "nodemon": "^3.1.14",
-    "ollama": "^0.6.3"
+    "ollama": "^0.6.3",
+    "pm2": "^7.0.3"
   }
 }

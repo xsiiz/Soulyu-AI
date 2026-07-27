@@ -9,7 +9,7 @@
   <meta property="og:description" content="ระบบผู้ช่วย AI อัจฉริยะส่วนตัว รองรับโมเดลภาษาไทย สรุปเอกสาร PDF และวิเคราะห์รูปภาพ">
   <meta property="og:type" content="website">
   
-  <title>Soulyu AI v1.0.0 - Intelligence Workspace</title>
+  <title>Soulyu AI</title>
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -21,6 +21,10 @@
   
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/css/style.css">
+
+  <!-- Firebase App & Auth SDK (v10 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
   <!-- Markdown & Syntax Highlighter -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -54,8 +58,8 @@
       </div>
     </div>
 
-    <!-- Model Selection Header Dropdown -->
-    <div class="flex items-center gap-2">
+    <!-- Model Selection & User Account Pill Header -->
+    <div class="flex items-center gap-2 md:gap-3">
       <div class="flex items-center gap-1.5 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-slate-200">
         <i data-lucide="cpu" class="w-3.5 h-3.5 text-violet-400"></i>
         <select id="modelSelect" class="bg-transparent focus:outline-none cursor-pointer text-xs text-slate-200 pr-1">
@@ -68,6 +72,23 @@
       <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-[11px] text-emerald-400">
         <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span>Ollama Core</span>
+      </div>
+
+      <!-- User Account Controls -->
+      <div id="userAuthContainer" class="flex items-center gap-2">
+        <button id="openAuthModalBtn" class="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-lg px-3 py-1.5 text-xs font-medium flex items-center gap-1.5 transition shadow-md shrink-0">
+          <i data-lucide="log-in" class="w-3.5 h-3.5"></i>
+          <span class="hidden sm:inline">เข้าสู่ระบบ / สมัครสมาชิก</span>
+        </button>
+
+        <div id="userProfilePill" class="hidden flex items-center gap-2 bg-slate-900/90 border border-slate-800 rounded-lg px-2.5 py-1 text-xs shadow-sm">
+          <img id="userAvatar" src="" class="w-5 h-5 rounded-full object-cover hidden">
+          <div id="userAvatarFallback" class="w-5 h-5 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">U</div>
+          <span id="userName" class="text-slate-200 font-medium text-xs max-w-[100px] truncate">User</span>
+          <button id="logoutBtn" class="hover:text-rose-400 text-slate-400 p-0.5 transition ml-1" title="ออกจากระบบ">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -212,6 +233,65 @@
       </div>
 
     </main>
+  </div>
+
+  <!-- Auth Modal (Login / Register / Google Sign-In) -->
+  <div id="authModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5 relative">
+      <button id="closeAuthModalBtn" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1 transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-violet-600 to-indigo-600 text-white flex items-center justify-center mx-auto shadow-lg shadow-violet-600/20 mb-2">
+          <i data-lucide="sparkles" class="w-6 h-6"></i>
+        </div>
+        <h3 id="authModalTitle" class="text-lg font-bold text-slate-100">เข้าสู่ระบบ Soulyu AI</h3>
+        <p id="authModalSubtitle" class="text-xs text-slate-400">บันทึกและซิงค์ประวัติการสนทนาแยกตามบัญชีของคุณ</p>
+      </div>
+
+      <!-- Google Sign-In Button -->
+      <button id="googleSignInBtn" type="button" class="w-full bg-slate-800 hover:bg-slate-700/80 text-slate-200 border border-slate-700/80 font-medium text-xs py-2.5 px-4 rounded-xl flex items-center justify-center gap-2.5 transition shadow">
+        <svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>เข้าสู่ระบบด้วย Google</span>
+      </button>
+
+      <div class="flex items-center gap-3">
+        <div class="flex-1 h-px bg-slate-800"></div>
+        <span class="text-[11px] text-slate-500 uppercase font-medium">หรือใช้อีเมล</span>
+        <div class="flex-1 h-px bg-slate-800"></div>
+      </div>
+
+      <!-- Email / Password Form -->
+      <form id="authForm" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">อีเมล (Email)</label>
+          <input type="email" id="authEmail" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-violet-500" placeholder="name@example.com">
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-medium text-slate-400 mb-1">รหัสผ่าน (Password)</label>
+          <input type="password" id="authPassword" required minlength="6" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-violet-500" placeholder="••••••••">
+        </div>
+
+        <div id="authErrorMsg" class="text-rose-400 text-xs hidden text-center"></div>
+
+        <button type="submit" id="authSubmitBtn" class="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-medium text-xs py-2.5 rounded-xl transition shadow">
+          เข้าสู่ระบบ
+        </button>
+      </form>
+
+      <div class="text-center pt-1">
+        <button id="toggleAuthModeBtn" type="button" class="text-xs text-slate-400 hover:text-violet-300 transition">
+          ยังไม่มีบัญชี? <span class="text-violet-400 font-semibold underline">สมัครสมาชิกใหม่</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- Client Master Application Script -->

@@ -8,6 +8,58 @@ app.set('view engine', 'ejs');
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
+// Helper function to fetch and scrape web page content
+async function fetchWebPageContent(url) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'th-TH,th;q=0.9,en;q=0.8'
+      }
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return null;
+    const html = await response.text();
+
+    // Extract page title
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const pageTitle = titleMatch ? titleMatch[1].replace(/\s+/g, ' ').trim() : url;
+
+    // Strip HTML tags and clean up whitespace
+    let cleanText = html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, '')
+      .replace(/<svg[\s\S]*?<\/svg>/gi, '')
+      .replace(/<header[\s\S]*?<\/header>/gi, '')
+      .replace(/<footer[\s\S]*?<\/footer>/gi, '')
+      .replace(/<nav[\s\S]*?<\/nav>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&gt;/gi, '>')
+      .replace(/&lt;/gi, '<')
+      .replace(/&amp;/gi, '&')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Limit length to avoid overwhelming model memory context
+    if (cleanText.length > 3500) {
+      cleanText = cleanText.substring(0, 3500) + '...';
+    }
+
+    return { title: pageTitle, content: cleanText, url };
+  } catch (err) {
+    console.error(`Error fetching web page (${url}):`, err.message);
+    return null;
+  }
+}
+
 // หน้าแรกแสดง UI
 app.get('/', (req, res) => {
   res.render('index');
@@ -61,10 +113,31 @@ app.post('/api/chat', async (req, res) => {
     return false;
   });
 
+  // ตรวจสอบว่าในข้อความล่าสุดของผู้ใช้มี URL หรือไม่
+  const lastUserMsg = cleanMessages.filter(m => m.role === 'user').pop();
+  if (lastUserMsg && typeof lastUserMsg.content === 'string') {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = lastUserMsg.content.match(urlRegex);
+
+    if (urls && urls.length > 0) {
+      const targetUrl = urls[0];
+      console.log(`[${timeStr}] 🌐 [Req #${reqId}] Web Scraper Intercept: ${targetUrl}`);
+      const webData = await fetchWebPageContent(targetUrl);
+      
+      if (webData && webData.content) {
+        cleanMessages.splice(cleanMessages.length - 1, 0, {
+          role: 'system',
+          content: `[ข้อมูลเนื้อหาจากเว็บที่ผู้ใช้ระบุ (${webData.url})]:\nชื่อหน้าเว็บ: ${webData.title}\nเนื้อหาเว็บ:\n${webData.content}`
+        });
+        console.log(`[${timeStr}] 🌐 [Req #${reqId}] Injected scraped web text (${webData.content.length} chars)`);
+      }
+    }
+  }
+
   const hasImages = cleanMessages.some(m => m.images && m.images.length > 0);
   let targetModel = model || 'qwen2.5:3b';
 
-  // หากมีการแนบรูปภาพมาในแชท ให้เลือกใช้ moondream (หรือ Vision Model) โดยอัตโนมัติ
+  // หากมีการแนบรูปภาพมาในแชท ให้เลือกใช้ Vision Model โดยอัตโนมัติ
   if (hasImages) {
     try {
       const listRes = await ollama.list();
@@ -148,7 +221,6 @@ app.post('/api/chat', async (req, res) => {
     if (!res.headersSent) {
       res.status(500).json({ error: error.message || 'เกิดข้อผิดพลาดในการประมวลผลจาก AI' });
     } else if (!res.writableEnded) {
-      res.write(`\n[ข้อผิดพลาด]: ${error.message || error}`);
       res.end();
     }
   }

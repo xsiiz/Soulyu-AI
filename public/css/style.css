@@ -26,6 +26,26 @@ body {
   background: #475569; 
 }
 
+/* Sidebar Smooth Collapse/Expand Transitions */
+#sidebar {
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.25s ease, 
+              transform 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  #sidebar.collapsed-sidebar {
+    width: 0 !important;
+    min-width: 0 !important;
+    margin-left: -18rem !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    border-right-width: 0 !important;
+  }
+}
+
 /* Markdown Styling */
 .prose pre {
   background: #0f172a !important;
